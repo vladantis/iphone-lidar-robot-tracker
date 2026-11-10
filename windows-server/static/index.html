@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>iPhone 13 Pro Max LiDAR → Humanoid Robot Teleop</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <style>
+    :root {
+      --bg: #0b0f17;
+      --panel: rgba(17, 24, 39, 0.88);
+      --border: rgba(56, 189, 248, 0.22);
+      --cyan: #22d3ee;
+      --green: #4ade80;
+      --purple: #a855f7;
+      --amber: #fbbf24;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      overflow: hidden;
+      height: 100vh;
+      display: grid;
+      grid-template-columns: 1fr 390px;
+    }
+    #viewport-container {
+      position: relative;
+      width: 100%;
+      height: 100vh;
+    }
+    #canvas3d {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .stage-labels {
+      position: absolute;
+      top: 18px;
+      left: 20px;
+      right: 20px;
+      display: flex;
+      justify-content: space-around;
+      pointer-events: none;
+    }
+    .stage-badge {
+      background: rgba(15, 23, 42, 0.82);
+      border: 1px solid var(--border);
+      padding: 8px 16px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      backdrop-filter: blur(8px);
+    }
+    .stage-badge.human { color: var(--cyan); border-color: rgba(34, 211, 238, 0.4); }
+    .stage-badge.robot { color: var(--green); border-color: rgba(74, 222, 128, 0.4); }
+
+    #sidebar {
+      background: var(--panel);
+      border-left: 1px solid var(--border);
+      padding: 16px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .card {
+      background: rgba(15, 23, 42, 0.75);
+      border: 1px solid rgba(148, 163, 184, 0.16);
+      border-radius: 12px;
+      padding: 12px;
+    }
+    .card-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .ip-box {
+      font-family: Consolas, monospace;
+      background: rgba(34, 211, 238, 0.1);
+      border: 1px solid rgba(34, 211, 238, 0.35);
+      color: var(--cyan);
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-size: 13px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .btn-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    button {
+      cursor: pointer;
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      background: rgba(30, 41, 59, 0.8);
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 600;
+      transition: all 0.15s;
+    }
+    button.active {
+      background: #0284c7;
+      border-color: var(--cyan);
+      color: #fff;
+    }
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      text-align: center;
+    }
+    .metric {
+      background: rgba(2, 6, 23, 0.6);
+      padding: 8px 6px;
+      border-radius: 8px;
+      border: 1px solid rgba(148, 163, 184, 0.1);
+    }
+    .metric-val {
+      font-family: Consolas, monospace;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--cyan);
+    }
+    .metric-lbl {
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    /* 8x6 LiDAR Depth Grid */
+    #lidar-grid {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      gap: 3px;
+    }
+    .lidar-cell {
+      height: 22px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: Consolas, monospace;
+      font-size: 9px;
+      color: #fff;
+      background: #1e293b;
+    }
+    /* Robot Angles Table */
+    .angle-list {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .angle-row {
+      display: grid;
+      grid-template-columns: 135px 52px 1fr;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+    }
+    .angle-name {
+      color: #cbd5e1;
+      font-family: Consolas, monospace;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .angle-val {
+      font-family: Consolas, monospace;
+      text-align: right;
+      color: var(--green);
+      font-weight: 600;
+    }
+    .bar-bg {
+      height: 6px;
+      background: #1e293b;
+      border-radius: 999px;
+      overflow: hidden;
+      position: relative;
+    }
+    .bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--cyan), var(--green));
+      width: 50%;
+    }
+  </style>
+</head>
+<body>
+  <div id="viewport-container">
+    <div class="stage-labels">
+      <div class="stage-badge human">1. iPhone 13 Pro Max ARKit + LiDAR Skeleton</div>
+      <div class="stage-badge robot">2. Retargeted 16-DOF Humanoid Robot</div>
+    </div>
+    <canvas id="canvas3d"></canvas>
+  </div>
+
+  <aside id="sidebar">
+    <div class="card">
+      <div class="card-title">
+        <span>iPhone 13 Pro Max Connection</span>
+        <span id="source-badge" style="color: var(--amber);">DEMO MODE</span>
+      </div>
+      <div class="ip-box">
+        <span>Windows IP: <strong id="lan-ip">...</strong></span>
+        <span>UDP: <strong id="udp-port">5005</strong></span>
+      </div>
+      <div class="btn-row">
+        <button id="btn-demo" class="active" onclick="setMode('DEMO')">Synthetic Demo</button>
+        <button id="btn-live" onclick="setMode('LIVE_UDP')">Live iPhone UDP</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Real-Time LiDAR & ARKit Telemetry</div>
+      <div class="metrics-grid">
+        <div class="metric">
+          <div class="metric-val" id="val-fps">60.0</div>
+          <div class="metric-lbl">STREAM FPS</div>
+        </div>
+        <div class="metric">
+          <div class="metric-val" id="val-depth">2.10 m</div>
+          <div class="metric-lbl">LIDAR DEPTH</div>
+        </div>
+        <div class="metric">
+          <div class="metric-val" id="val-pkts">0</div>
+          <div class="metric-lbl">UDP PACKETS</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <span>LiDAR 8×6 Metric Depth Map (Meters)</span>
+        <span style="color: var(--cyan); font-size: 10px;">SmoothedSceneDepth</span>
+      </div>
+      <div id="lidar-grid"></div>
+    </div>
+
+    <div class="card" style="flex: 1;">
+      <div class="card-title">
+        <span>Retargeted Robot Joint Angles</span>
+        <span style="color: var(--green); font-size: 10px;">16-DOF IK Output</span>
+      </div>
+      <div id="angle-list" class="angle-list"></div>
+    </div>
+  </aside>
+
+  <script>
+    // --- 1. Initialize UI Grids ---
+    const lidarGridEl = document.getElementById('lidar-grid');
+    const lidarCells = [];
+    for (let i = 0; i < 48; i++) {
+      const cell = document.createElement('div');
+      cell.className = 'lidar-cell';
+      cell.textContent = '0.0';
+      lidarGridEl.appendChild(cell);
+      lidarCells.push(cell);
+    }
+
+    fetch('/api/info')
+      .then(r => r.json())
+      .then(info => {
+        document.getElementById('lan-ip').textContent = info.lan_ip;
+        document.getElementById('udp-port').textContent = info.udp_port;
+        updateModeButtons(info.mode);
+      });
+
+    function setMode(mode) {
+      fetch('/api/mode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode })
+      })
+      .then(r => r.json())
+      .then(data => updateModeButtons(data.mode));
+    }
+
+    function updateModeButtons(mode) {
+      document.getElementById('btn-demo').classList.toggle('active', mode === 'DEMO');
+      document.getElementById('btn-live').classList.toggle('active', mode === 'LIVE_UDP');
+      const badge = document.getElementById('source-badge');
+      badge.textContent = mode === 'DEMO' ? 'DEMO SIMULATOR' : 'LIVE IPHONE UDP';
+      badge.style.color = mode === 'DEMO' ? '#fbbf24' : '#4ade80';
+    }
+
+    // --- 2. Three.js Side-by-Side 3D Scene (Human Skeleton on Left, Robot Avatar on Right) ---
+    const canvas = document.getElementById('canvas3d');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0b0f17);
+
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 50);
+    camera.position.set(0, 0.35, 3.3);
+    camera.lookAt(0, 0.0, 0);
+
+    // Lighting
+    scene.add(new THREE.AmbientLight(0xffffff, 0.65));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+    dirLight.position.set(3, 6, 5);
+    scene.add(dirLight);
+
+    // Floor Grid
+    const grid = new THREE.GridHelper(6, 24, 0x1e293b, 0x111827);
+    grid.position.y = -0.9;
+    scene.add(grid);
+
+    // --- LEFT STAGE: Human 3D Skeleton (x = -0.85) ---
+    const humanGroup = new THREE.Group();
+    humanGroup.position.set(-0.85, 0, 0);
+    scene.add(humanGroup);
+
+    const jointMeshes = {};
+    const boneLines = [];
+    const sphereGeo = new THREE.SphereGeometry(0.026, 16, 16);
+    const jointMat = new THREE.MeshStandardMaterial({ color: 0x22d3ee, emissive: 0x0891b2, emissiveIntensity: 0.4 });
+    const boneMat = new THREE.LineBasicMaterial({ color: 0x4ade80, linewidth: 2 });
+
+    function updateHumanSkeleton(joints, bones) {
+      for (const [name, arr] of Object.entries(joints)) {
+        if (!jointMeshes[name]) {
+          const m = new THREE.Mesh(sphereGeo, jointMat);
+          humanGroup.add(m);
+          jointMeshes[name] = m;
+        }
+        jointMeshes[name].position.set(arr[0], arr[1], arr[2]);
+      }
+
+      // Rebuild or update bone segments
+      while (boneLines.length < bones.length) {
+        const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+        const line = new THREE.Line(geo, boneMat);
+        humanGroup.add(line);
+        boneLines.push(line);
+      }
+      bones.forEach((pair, idx) => {
+        const a = joints[pair[0]];
+        const b = joints[pair[1]];
+        if (a && b) {
+          const posArr = boneLines[idx].geometry.attributes.position.array;
+          posArr[0] = a[0]; posArr[1] = a[1]; posArr[2] = a[2];
+          posArr[3] = b[0]; posArr[4] = b[1]; posArr[5] = b[2];
+          boneLines[idx].geometry.attributes.position.needsUpdate = true;
+        }
+      });
+    }
+
+    // --- RIGHT STAGE: Articulated 16-DOF Humanoid Robot (x = +0.85) ---
+    const robotRoot = new THREE.Group();
+    robotRoot.position.set(0.85, 0, 0);
+    scene.add(robotRoot);
+
+    const metalMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.6, roughness: 0.35 });
+    const accentMat = new THREE.MeshStandardMaterial({ color: 0x4ade80, emissive: 0x16a34a, emissiveIntensity: 0.3 });
+    const visorMat = new THREE.MeshStandardMaterial({ color: 0x22d3ee, emissive: 0x06b6d4, emissiveIntensity: 0.7 });
+
+    function makeLimb(w, len, d, yOffset, mat = metalMat) {
+      const g = new THREE.Group();
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, len, d), mat);
+      mesh.position.y = yOffset;
+      g.add(mesh);
+      const jointBall = new THREE.Mesh(new THREE.SphereGeometry(w * 0.65, 12, 12), accentMat);
+      g.add(jointBall);
+      return g;
+    }
+
+    // Pelvis & Torso Hierarchy
+    const pelvis = new THREE.Group();
+    robotRoot.add(pelvis);
+    pelvis.add(new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.10, 0.14), metalMat));
+
+    const torsoPivot = new THREE.Group();
+    pelvis.add(torsoPivot);
+    const chestMesh = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.38, 0.16), metalMat);
+    chestMesh.position.y = 0.22;
+    torsoPivot.add(chestMesh);
+
+    // Head
+    const headPivot = new THREE.Group();
+    headPivot.position.set(0, 0.46, 0);
+    torsoPivot.add(headPivot);
+    const headBox = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.18, 0.16), metalMat);
+    headBox.position.y = 0.10;
+    headPivot.add(headBox);
+    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.05, 0.02), visorMat);
+    visor.position.set(0, 0.11, 0.085);
+    headPivot.add(visor);
+
+    // Left Arm
+    const lShoulder = new THREE.Group();
+    lShoulder.position.set(0.19, 0.38, 0);
+    torsoPivot.add(lShoulder);
+    lShoulder.add(makeLimb(0.07, 0.26, 0.07, -0.13));
+    const lElbow = new THREE.Group();
+    lElbow.position.set(0, -0.26, 0);
+    lShoulder.add(lElbow);
+    lElbow.add(makeLimb(0.06, 0.24, 0.06, -0.12));
+
+    // Right Arm
+    const rShoulder = new THREE.Group();
+    rShoulder.position.set(-0.19, 0.38, 0);
+    torsoPivot.add(rShoulder);
+    rShoulder.add(makeLimb(0.07, 0.26, 0.07, -0.13));
+    const rElbow = new THREE.Group();
+    rElbow.position.set(0, -0.26, 0);
+    rShoulder.add(rElbow);
+    rElbow.add(makeLimb(0.06, 0.24, 0.06, -0.12));
+
+    // Left Leg
+    const lHip = new THREE.Group();
+    lHip.position.set(0.10, -0.05, 0);
+    pelvis.add(lHip);
+    lHip.add(makeLimb(0.09, 0.38, 0.09, -0.19));
+    const lKnee = new THREE.Group();
+    lKnee.position.set(0, -0.38, 0);
+    lHip.add(lKnee);
+    lKnee.add(makeLimb(0.075, 0.38, 0.075, -0.19));
+
+    // Right Leg
+    const rHip = new THREE.Group();
+    rHip.position.set(-0.10, -0.05, 0);
+    pelvis.add(rHip);
+    rHip.add(makeLimb(0.09, 0.38, 0.09, -0.19));
+    const rKnee = new THREE.Group();
+    rKnee.position.set(0, -0.38, 0);
+    rHip.add(rKnee);
+    rKnee.add(makeLimb(0.075, 0.38, 0.075, -0.19));
+
+    function updateRobotFromAngles(rad) {
+      if (!rad) return;
+      torsoPivot.rotation.set(rad.torso_pitch || 0, rad.torso_yaw || 0, rad.torso_roll || 0);
+      headPivot.rotation.set(rad.head_tilt || 0, rad.head_pan || 0, 0);
+
+      lShoulder.rotation.set(-(rad.left_shoulder_pitch || 0), 0, rad.left_shoulder_roll || 0);
+      lElbow.rotation.set(-(rad.left_elbow_pitch || 0), 0, 0);
+
+      rShoulder.rotation.set(-(rad.right_shoulder_pitch || 0), 0, -(rad.right_shoulder_roll || 0));
+      rElbow.rotation.set(-(rad.right_elbow_pitch || 0), 0, 0);
+
+      lHip.rotation.set(-(rad.left_hip_pitch || 0), 0, rad.left_hip_roll || 0);
+      lKnee.rotation.set(rad.left_knee_pitch || 0, 0, 0);
+
+      rHip.rotation.set(-(rad.right_hip_pitch || 0), 0, -(rad.right_hip_roll || 0));
+      rKnee.rotation.set(rad.right_knee_pitch || 0, 0, 0);
+    }
+
+    // --- 3. Subscribe to 60Hz Server-Sent Events Stream ---
+    const angleListEl = document.getElementById('angle-list');
+    const evtSource = new EventSource('/events');
+
+    evtSource.onmessage = (e) => {
+      const data = JSON.parse(e.data);
+      updateModeButtons(data.mode);
+
+      document.getElementById('val-fps').textContent = data.fps.toFixed(1);
+      document.getElementById('val-depth').textContent = (data.frame.centerLidarDepthM || 0).toFixed(2) + ' m';
+      document.getElementById('val-pkts').textContent = data.udpPackets;
+
+      // Update 8x6 LiDAR Depth Map Heatmap
+      const grid = data.frame.lidarGrid8x6 || [];
+      for (let i = 0; i < 48; i++) {
+        const d = grid[i] || 0;
+        lidarCells[i].textContent = d.toFixed(1);
+        const norm = Math.max(0, Math.min(1, (d - 0.5) / 3.5));
+        const hue = Math.round((1 - norm) * 195); // Cyan/Blue for close, dark slate for far
+        lidarCells[i].style.background = `hsl(${hue}, 75%, ${38 - norm * 18}%)`;
+      }
+
+      // Update 3D Human & Robot
+      if (data.frame.joints && data.bones) {
+        updateHumanSkeleton(data.frame.joints, data.bones);
+      }
+      if (data.robot) {
+        updateRobotFromAngles(data.robot.radians);
+        renderAnglesTable(data.robot.degrees);
+      }
+    };
+
+    function renderAnglesTable(degObj) {
+      let html = '';
+      for (const [name, deg] of Object.entries(degObj)) {
+        const pct = Math.max(0, Math.min(100, ((deg + 140) / 280) * 100));
+        html += `
+          <div class="angle-row">
+            <span class="angle-name">${name}</span>
+            <span class="angle-val">${deg > 0 ? '+' : ''}${deg.toFixed(1)}°</span>
+            <div class="bar-bg"><div class="bar-fill" style="width:${pct}%"></div></div>
+          </div>`;
+      }
+      angleListEl.innerHTML = html;
+    }
+
+    // --- 4. Render Loop & Resize ---
+    function onResize() {
+      const container = document.getElementById('viewport-container');
+      renderer.setSize(container.clientWidth, container.clientHeight);
+      camera.aspect = container.clientWidth / container.clientHeight;
+      camera.updateProjectionMatrix();
+    }
+    window.addEventListener('resize', onResize);
+    onResize();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      renderer.render(scene, camera);
+    }
+    animate();
+  </script>
+</body>
+</html>

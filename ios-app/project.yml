@@ -1,0 +1,62 @@
+name: LiDARBotTracker
+options:
+  bundleIdPrefix: com.robotteleop
+  deploymentTarget:
+    iOS: "15.0"
+  xcodeVersion: "15.0"
+  generateEmptyDirectories: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    TARGETED_DEVICE_FAMILY: "1" # iPhone
+    INFOPLIST_FILE: Info.plist
+    PRODUCT_BUNDLE_IDENTIFIER: com.robotteleop.lidarbottracker
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+
+targets:
+  LiDARBotTracker:
+    type: application
+    platform: iOS
+    deploymentTarget: "15.0"
+    sources:
+      - path: Sources
+    info:
+      path: Info.plist
+      properties:
+        CFBundleDisplayName: "LiDAR Teleop"
+        CFBundleExecutable: $(EXECUTABLE_NAME)
+        CFBundleIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER)
+        CFBundleInfoDictionaryVersion: "6.0"
+        CFBundleName: $(PRODUCT_NAME)
+        CFBundlePackageType: APPL
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSRequiresIPhoneOS: true
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UILaunchScreen: {}
+        UIRequiredDeviceCapabilities:
+          - arm64
+          - arkit
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        NSCameraUsageDescription: "Camera and LiDAR scanner are required for real-time 3D human body motion tracking and robot teleoperation."
+        NSLocalNetworkUsageDescription: "Local network access is required to stream real-time 3D skeleton and LiDAR depth telemetry over UDP to your Windows robot server."
+    settings:
+      base:
+        ENABLE_BITCODE: NO
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: ""
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGNING_ALLOWED: NO
+    dependencies:
+      - sdk: ARKit.framework
+      - sdk: RealityKit.framework
+      - sdk: Network.framework
+      - sdk: Combine.framework
+      - sdk: SwiftUI.framework
+      - sdk: UIKit.framework
