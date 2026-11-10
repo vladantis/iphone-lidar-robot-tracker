@@ -8,7 +8,7 @@ on:
 jobs:
   build-ipa:
     name: Compile iOS ARKit + LiDAR App on macOS
-    runs-on: macos-14
+    runs-on: macos-latest
 
     steps:
       - name: Checkout repository
